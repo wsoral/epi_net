@@ -1,8 +1,10 @@
 from mesa import Agent, Model
 from mesa.time import SimultaneousActivation
 from mesa.space import SingleGrid
+from mesa.space import NetworkGrid
 from mesa.datacollection import DataCollector
 from numpy import corrcoef
+import networkx as nx
 
 HATER = 1
 NO_HATER = 0
@@ -44,12 +46,8 @@ class HateAgent(Agent):
         self.behavior = self.random.choices([NO_HATER, HATER], weights=[5,1])[0]
 
     def step(self):
-        neighbors_coords = self.model.grid.get_neighborhood(
-            self.pos,
-            moore=True,
-            include_center=False
-        )
-        neighbors = self.model.grid.get_cell_list_contents(neighbors_coords)
+        neighbors_nodes = self.model.grid.get_neighbors(self.pos, include_center=False)
+        neighbors = self.model.grid.get_cell_list_contents(neighbors_nodes)
         neigh_beh = [neigh.behavior for neigh in neighbors]
 
         self._nextBehavior = self.behavior
@@ -84,17 +82,26 @@ class HateModel(Model):
     """A model of hate speech network"""
     def __init__(self, width, height):
         self.num_agents = width*height
-        self.grid = SingleGrid(width, height, True)
+        self.num_nodes = self.num_agents
+        self.G = nx.erdos_renyi_graph(n=self.num_nodes, p=0.05)
+        self.grid = NetworkGrid(self.G)
         self.schedule = SimultaneousActivation(self)
         self.running = True
 
         i = 0
         # Create agents
-        for (contents, x, y) in self.grid.coord_iter():
+        list_of_random_nodes = self.random.sample(self.G.nodes(), self.num_agents)
+
+        for i in range(self.num_agents):
             a = HateAgent(i, self)
-            i += 1
-            self.grid.place_agent(a, (x, y))
+            self.grid.place_agent(a, list_of_random_nodes[i])
             self.schedule.add(a)
+
+        # for (contents, x, y) in self.grid.coord_iter():
+        #     a = HateAgent(i, self)
+        #     i += 1
+        #     self.grid.place_agent(a, (x, y))
+        #     self.schedule.add(a)
 
         self.datacollector = DataCollector(
             model_reporters={"PerHate": percent_haters,
