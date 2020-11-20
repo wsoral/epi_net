@@ -1,0 +1,35 @@
+Właściwości oryginalnej pseudo sieci Wiktora:
+n = 400
+średnia liczba krawędzi:
+(64*8 + 4*3 + 32*5)/100 = (512 + 12 + 160)/100 = 6.84
+dwie kategorie wierzchołków
+M1 o stopniu = 8 (p = .64)
+M2 o stopniu ≈ 4,8 (p = .36) (w zaokrągleniu powiedzmy, że M2 ma stopień 5, bo algorytmy nie pozwalają na więcej, niż dwa rodzaje wierzchołków, ani na ułamki).
+
+Generując różne modele sieci, naszym celem jest uzyskanie takich, które będą miały takie same / bardzo zbliżone:
+* Liczba wierzchołków (400)
+* Średnia liczba krawędzi (6.48) czyli pewnie między 6 a 7
+
+algorytmy, które rokują, jeśli chodzi o wykorzystanie do generowania sieci:
+* Random Partition Graph - przyjmuje jako argumenty:
+        - listę grup i ich rozmiarów
+        - prawdopodobieństwo zawiązania krawędzi w obrębie grupy
+        - prawdopodobieństwo zawiązania krawędzi między grupami
+
+* algorytm dwumianowy (Erdos-Renyi) - przyjmuje jako argumenty:
+        - liczbę wierzchołków
+        - prawdopodobieństwo zawiązania krawędzi dla każdej możliwej pary wierzchołków.
+        - chyba najbardziej losowy pod kątem interesujących nas właściwości
+        
+* Newman-Watts-Strogatz - przyjmuje jako argumenty:
+        - liczbę wierzchołków
+        - liczbę sąsiadów, z którymi każdy wierzchołek dzieli krawędź
+        - prawdopodobieństwo, że pojawi się krawędź z wierzchołkiem spoza sąsiedztwa
+        
+* Podwójny Graf Barabasi-Alberta - przyjmuje jako argumenty:
+        - liczbę wierzchołków
+        - pierwszy stopień wierzchołków
+        - drugi stopień wierzchołków
+        - prawdopodobieństwo p z którym nowy wierzchołek bedzie miał stopień pierwszy (dla drugiego: 1-p)
+        - Najlepiej oddaje dynamikę sieci, poprzez preferencję przyłączania nowych wierzchołków do tych spośród cześniej istniejących, które mają najwięcej krawędzi.
+        

@@ -1,49 +1,86 @@
 from mesa import Agent, Model
 from mesa.time import SimultaneousActivation
-from mesa.space import SingleGrid
 from mesa.space import NetworkGrid
 from mesa.datacollection import DataCollector
-from numpy import corrcoef
 import networkx as nx
+import numpy as np
+import random
 
 HATER = 1
 NO_HATER = 0
-CONTEMPT_A = 2
-CONTEMPT_B = 5
-HSSENSI_A = 5
-HSSENSI_B = 1
 
 def percent_haters(model):
     agent_behs = [agent.behavior for agent in model.schedule.agents]
     x = sum(agent_behs)/len(agent_behs)
     return x
 
-def average_sens(model):
-    agent_sens = [agent.hs_sensi for agent in model.schedule.agents]
-    x = sum(agent_sens)/len(agent_sens)
+def average_hate(model):
+    agent_hate = [agent.hate for agent in model.schedule.agents]
+    x = sum(agent_hate)/len(agent_hate)
     return x
 
-def average_contempt(model):
-    agent_cont = [agent.contempt for agent in model.schedule.agents]
-    x = sum(agent_cont)/len(agent_cont)
-    return x
+# def netgen_dba(n=400, m1=4, m2=3, p=.64):
+#     I = nx.dual_barabasi_albert_graph(n=n, m1=m1, m2=m2, p=p)
+#     degs = [I.degree[node] for node in list(I.nodes)]
+#     avg_deg = np.mean(degs)
+#     avg_clust = nx.average_clustering(I)
+#     connectivity = nx.node_connectivity(I)
+#
+#     return [I, avg_clust, connectivity]
 
-def cor_hate_cont(model):
-    agent_behs = [agent.behavior for agent in model.schedule.agents]
-    agent_cont = [agent.contempt for agent in model.schedule.agents]
-    return corrcoef(agent_behs, agent_cont)[1,0]
+def netgen_dba(n=1000, m1=4, m2=3, p=.55):
+    I = nx.dual_barabasi_albert_graph(n=n, m1=m1, m2=m2, p=p)
+    degs = [I.degree[node] for node in list(I.nodes)]
+    avg_deg = np.mean(degs)
+    while avg_deg > 7 or avg_deg <6:
+        print(f"Wrong mean degree number. Getting {avg_deg}. Rerunning.")
+        I = nx.dual_barabasi_albert_graph(n=n, m1=m1, m2=m2, p=p)
+        degs = [I.degree[node] for node in list(I.nodes)]
+        avg_deg = np.mean(degs)
+    big_nodes = [node for node in list(I.nodes) if I.degree(node) >= 40]
+    node_size = [I.degree(node) for node in big_nodes]
+    return I
+
+# def netgen_dba(n=1000, m1=4, m2=3, p=.64, maxDeg=40):
+#     I = nx.dual_barabasi_albert_graph(n=n, m1=m1, m2=m2, p=p)
+#     degs = [I.degree[node] for node in list(I.nodes)]
+#     avg_deg = np.mean(degs)
+#     big_nodes = [node for node in list(I.nodes) if I.degree(node) >= maxDeg]
+#     node_size = [I.degree(node) for node in big_nodes]
+#     I.remove_nodes_from(big_nodes)
+#     for numerro in big_nodes:
+#         I.add_node(numerro)
+#         eN = random.choice([m1, m2])
+#         for _ in range(eN):
+#             to = random.choice(list(I.nodes()))
+#             I.add_edge(numerro, to)
+#     new_degs = [I.degree[node] for node in list(I.nodes)]
+#     new_avg = np.mean(new_degs)
+#     while new_avg > 7 or new_avg < 6:
+#         I = nx.dual_barabasi_albert_graph(n=n, m1=m1, m2=m2, p=p)
+#         degs = [I.degree[node] for node in list(I.nodes)]
+#         avg_deg = np.mean(degs)
+#         big_nodes = [node for node in list(I.nodes) if I.degree(node) >= maxDeg]
+#         node_size = [I.degree(node) for node in big_nodes]
+#         I.remove_nodes_from(big_nodes)
+#         for numerro in big_nodes:
+#             I.add_node(numerro)
+#             eN = random.choice([m1, m2])
+#             for _ in range(eN):
+#                 to = random.choice(list(I.nodes()))
+#                 I.add_edge(numerro, to)
+#         new_degs = [I.degree[node] for node in list(I.nodes)]
+#         new_avg = np.mean(new_degs)
+#
+#     return I
 
 
-class HateAgent(Agent):
-    """Member of hate speech network"""
+class NormAgent(Agent):
     def __init__(self, unique_id, model):
         super().__init__(unique_id, model)
-
-        # level of contemtuous prejudice
-        self.contempt =  self.random.betavariate(CONTEMPT_A, CONTEMPT_B)
-        # level of sensitivity to hate speech
-        self.hs_sensi = self.random.betavariate(HSSENSI_A, HSSENSI_B)
-        self.behavior = self.random.choices([NO_HATER, HATER], weights=[5,1])[0]
+        self.behavior = self.random.choices([NO_HATER, HATER], weights=[9,1])[0]
+        self.hate = self.random.betavariate(2,5)
+        self.knows_hatered = 0
 
     def step(self):
         neighbors_nodes = self.model.grid.get_neighbors(self.pos, include_center=False)
@@ -51,67 +88,46 @@ class HateAgent(Agent):
         neigh_beh = [neigh.behavior for neigh in neighbors]
 
         self._nextBehavior = self.behavior
+        self._nextHate = self.hate
 
-        if self.contempt > self.random.uniform(0, 1):
-            if sum(neigh_beh) > 4:
-                self._nextBehavior = HATER
-            else:
-                if self.hs_sensi > self.random.uniform(0, 1):
-                    self._nextBehavior = NO_HATER
-                else:
-                    self._nextBehavior = HATER
-        else:
-            self._nextBehavior = NO_HATER
+        if (HATER in [neigh_beh] or self.behavior == HATER):
+            self.knows_hatered = 1
 
-        self._next_hs_sensi = self.hs_sensi
-        if self.hs_sensi > 0.08:
-            self._next_hs_sensi -= 0.005*sum(neigh_beh)
+        if (self.hate > self.random.uniform(0,1)) and (self.knows_hatered == 1):
+            self._nextBehavior = HATER
+        else: self._nextBehavior = NO_HATER
 
-        self._next_contempt = self.contempt
-        if self.contempt < 0.92:
-            self._next_contempt += 0.001*sum(neigh_beh)
+        if self.hate < 0.8:
+            self._nextHate = self.hate + sum(neigh_beh)*0.01
 
     def advance(self):
+        self.hate = self._nextHate
         self.behavior = self._nextBehavior
-        self.hs_sensi = self._next_hs_sensi
-        self.contempt = self._next_contempt
 
 
-
-class HateModel(Model):
-    """A model of hate speech network"""
-    def __init__(self, width, height):
-        self.num_agents = width*height
+class NormModel(Model):
+    def __init__(self, size):
+        self.num_agents = size
         self.num_nodes = self.num_agents
-        self.G = nx.erdos_renyi_graph(n=self.num_nodes, p=0.05)
+        self.G = netgen_dba()
         self.grid = NetworkGrid(self.G)
         self.schedule = SimultaneousActivation(self)
         self.running = True
 
         i = 0
-        # Create agents
         list_of_random_nodes = self.random.sample(self.G.nodes(), self.num_agents)
-
         for i in range(self.num_agents):
-            a = HateAgent(i, self)
+            a = NormAgent(i, self)
             self.grid.place_agent(a, list_of_random_nodes[i])
             self.schedule.add(a)
 
-        # for (contents, x, y) in self.grid.coord_iter():
-        #     a = HateAgent(i, self)
-        #     i += 1
-        #     self.grid.place_agent(a, (x, y))
-        #     self.schedule.add(a)
-
         self.datacollector = DataCollector(
             model_reporters={"PerHate": percent_haters,
-                             "AveSens": average_sens,
-                             "AveCont": average_contempt,
-                             "CorHatCon": cor_hate_cont},
+                             "AveHate": average_hate,
+                            },
             agent_reporters={"Hate": "behavior"}
         )
 
     def step(self):
-        '''Advance the model by one step'''
         self.datacollector.collect(self)
         self.schedule.step()

@@ -1,13 +1,16 @@
-from model import *
+from old_model.model import *
 from mesa.visualization.modules import ChartModule
 from mesa.visualization.modules import NetworkModule
 from mesa.visualization.ModularVisualization import ModularServer
 
+
+
 def network_portrayal(G):
+
     portrayal = dict()
     portrayal['nodes'] = [
         {"id": node_id,
-         "size": agents[0].hate,
+         "size": agents[0].contempt,
          "color": "black" if agents[0].behavior == 1 else "#999999"}
         for (node_id, agents) in G.nodes.data('agent')
     ]
@@ -22,22 +25,28 @@ def network_portrayal(G):
 
     return portrayal
 
-grid = NetworkModule(network_portrayal)
 
+grid = NetworkModule(network_portrayal, 750, 750, library='sigma')
+# grid = CanvasGrid(agent_portrayal, 40, 40, 800, 800)
 
-PerHate = ChartModule([{"Label": "PerHate",
+chartHate = ChartModule([{"Label": "PerHate",
                       "Color": "Black"}],
                     data_collector_name="datacollector")
 
-chartHate = ChartModule([{"Label": "AveHate",
+chartSens = ChartModule([{"Label": "AveSens",
                       "Color": "Black"}],
                     data_collector_name="datacollector")
 
-server = ModularServer(NormModel,
-                       [grid,
-                        PerHate,
-                        chartHate,
-                        ],
+chartCont = ChartModule([{"Label": "AveCont",
+                      "Color": "Black"}],
+                    data_collector_name="datacollector")
+
+chartCorr = ChartModule([{"Label": "CorHatCon",
+                      "Color": "Black"}],
+                    data_collector_name="datacollector")
+
+server = ModularServer(HateModel,
+                       [grid, chartHate, chartSens, chartCont, chartCorr],
                        "Hate Speech Model",
-                       {"size": 1000})
+                       {"width": 20, "height": 20})
 server.port = 8521
