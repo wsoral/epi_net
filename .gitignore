@@ -275,5 +275,6 @@ dmypy.json
 
 /net_benchmark
 /old_model
+/old_automatic
 
 # End of https://www.toptal.com/developers/gitignore/api/linux,python,jupyternotebooks,pycharm
