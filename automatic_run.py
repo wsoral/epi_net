@@ -78,34 +78,16 @@ def net_parafara(model):
     x = model.parameters
     return x
 
+# Read the datafile with desired network parameters:
+def net_reader(file):
+    with open(file, 'r') as f:
+        feats = csv.reader(f)
+        siatki = list(feats)
+        return siatki
+
+net_set = net_reader('nets_to_use.csv')[1:]
 
 # Network generators
-
-# Old net generator, kept if the new one doesn't work as expected.
-
-# def netgen_dba(n=1000, m1=4, m2=3, p=.64, maxDeg=40, cull=False):
-#     I = nx.dual_barabasi_albert_graph(n=n, m1=m1, m2=m2, p=p)
-#     degs = [I.degree[node] for node in list(I.nodes)]
-#     avg_deg = np.mean(degs)
-#     if cull == True:
-#         big_nodes = [node for node in list(I.nodes) if I.degree(node) >= maxDeg]
-#         I.remove_nodes_from(big_nodes)
-#         for numerro in big_nodes:
-#             I.add_node(numerro)
-#             eN = random.choice([m1, m2])
-#             for _ in range(eN):
-#                 to = random.choice(list(I.nodes()))
-#                 I.add_edge(numerro, to)
-#         degs = [I.degree[node] for node in list(I.nodes)]
-#         avg_deg = np.mean(new_degs)
-#     # while avg_deg > 7 or new_avg < 6:
-#     #     netgen_dba(n=n, m1=m1, m2=m2, p=p, maxDeg=maxDeg, cull=cull)
-#     if not (nx.is_connected(I) and  (6 <= avg_deg <= 7)):
-#         netgen_dba(n=n, m1=m1, m2=m2, p=p, maxDeg=maxDeg, cull=cull)
-#     return I
-
-# The network generator
-
 
 def netgen_dba(n=1000, m1=5, m2=2, p=.64, cull=True, maxDeg=20):  # The default values, will not be used in the sim.
     # get the global variable it to count attempts - can't be local because the function calls itself a failure.
@@ -130,12 +112,13 @@ def netgen_dba(n=1000, m1=5, m2=2, p=.64, cull=True, maxDeg=20):  # The default 
                 I.add_edge(numerro, to)
         degs = [I.degree[node] for node in list(I.nodes)]
         avg_deg = np.mean(degs)  # This whole loop should be a function, but method will not produce any new SuperNodes
+        conn = nx.average_node_connectivity(I)
     if not (nx.is_connected(I) and (4 <= avg_deg <= 10)):  # Test if network within parameters
         return netgen_dba(n=n, m1=m1, m2=m2, p=p, maxDeg=maxDeg, cull=cull)  # If not within parameters, call self.
     else:
         it = 0  # Zero the attempt counter.
 
-        return (I, [m1, m2, p, cull, maxDeg])  # Good idea?
+        return (I, [m1, m2, p, cull, maxDeg, conn])  # Good idea?
 
 
 # Initialize global variable it, by seting it to zero
@@ -174,14 +157,15 @@ class NormAgent(Agent):
 
 
 class NormModel(Model):
-    def __init__(self, size, m1, m2, p, cull, maxDeg):
+    def __init__(self, size, set_no):
         self.num_agents = size
         self.num_nodes = self.num_agents
-        self.m1 = m1
-        self.m2 = m2
-        self.p = p
-        self.cull = cull
-        self.maxDeg = maxDeg
+        self.set = net_set[set_no][2:]  # Read the net_set, remove old index data.
+        self.m1 = self.set[0]
+        self.m2 = self.set[1]
+        self.p = self.set[2]
+        self.cull = self.set[4]
+        self.maxDeg = self.set[3]
         self.network = netgen_dba(self.m1, self.m2, self.p, self.cull,
                                   self.maxDeg)  # Returns a tuple (network, [list, of, parameters])
         self.G = self.network[1]
@@ -216,16 +200,12 @@ class NormModel(Model):
 # only the ones most common in successfull net generations were passed.
 
 fixed_params = {
-    "size": 1000
-    # "density": 0.5,
-    # "hater_pc": 0.5
+    "size": 1000,
+
 }
 
 variable_params = {
-    "m1": [4, 3, 5, 6],
-    "m2": [4, 3, 5, 6],
-    "p": [0.7, 0.5, 0.8, 0.2],
-    "maxDeg": [30, 20, 50, 70],
+    "set_no": np.arange(len(net_set)),
     "cull": [True, False]
 }
 
