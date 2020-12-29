@@ -43,6 +43,7 @@ And the last element - an agent must have used HS himself in the past, or have w
 neighbour using it, in order to be able to use it themself. 
 """
 
+
 # Define a function to read the network file with nets to be used in simulation.
 
 
@@ -78,29 +79,30 @@ def net_parafara(model):
     x = model.parameters
     return x
 
-# Read the datafile with desired network parameters:
-def net_reader(file):
-    with open(file, 'r') as f:
-        feats = csv.reader(f)
-        siatki = list(feats)
-        return siatki
 
-net_set = net_reader('nets_to_use.csv')[1:]
+net_setx = net_reader('nets_to_use.csv')[1:]
+net_set = [tuple(i) for i in net_setx]
 
 # Network generators
 
-def netgen_dba(n=1000, m1=5, m2=2, p=.64, cull=True, maxDeg=20):  # The default values, will not be used in the sim.
-    # get the global variable it to count attempts - can't be local because the function calls itself a failure.
-    global it
-    it += 1
-    if it > 10:
+# def netgen_dba(n=1000, m1=5, m2=2, p=.64, cull=True, maxDeg=20):  # The default values, will not be used in the sim.
+# get the global variable it to count attempts - can't be local because the function calls itself at failure.
+def netgen_dba(n, m1, m2, p, cull, maxDeg):
+    global attempt
+    global usable_networks
+    attempt += 1
+    if attempt > 10:
+        attempt = 0
         # When it exceeds 10, the function should stop the given run and return a code for failed attempt
         # at creating the net within assigned parameters.
-        return [666, 666, 666, 666, 'Nope', 666]
+        print(f"Failed generating network with parameters {m1, m2, p, cull, maxDeg}. Trying on.")
+        return "fail"
 
     I = nx.dual_barabasi_albert_graph(n=n, m1=m1, m2=m2, p=p)  # Call the basic function
     degs = [I.degree[node] for node in list(I.nodes)]  # Calculate the node degree list for all nodes
     avg_deg = np.mean(degs)  # Calculate the mean node degree for the whole network.
+    # conn = nx.average_node_connectivity(I)
+    conn = 1
     if cull:  # Only if the network generator should remove supernodes.
         big_nodes = [node for node in list(I.nodes) if I.degree(node) >= maxDeg]  # Assigned SuperNode size.
         I.remove_nodes_from(big_nodes)
@@ -112,17 +114,27 @@ def netgen_dba(n=1000, m1=5, m2=2, p=.64, cull=True, maxDeg=20):  # The default 
                 I.add_edge(numerro, to)
         degs = [I.degree[node] for node in list(I.nodes)]
         avg_deg = np.mean(degs)  # This whole loop should be a function, but method will not produce any new SuperNodes
-        conn = nx.average_node_connectivity(I)
+        # conn = nx.average_node_connectivity(I)
+        conn = 1
     if not (nx.is_connected(I) and (4 <= avg_deg <= 10)):  # Test if network within parameters
         return netgen_dba(n=n, m1=m1, m2=m2, p=p, maxDeg=maxDeg, cull=cull)  # If not within parameters, call self.
     else:
-        it = 0  # Zero the attempt counter.
+        attempt = 0  # Zero the attempt counter.
+        usable_networks += 1
+        print(f"Successfully generated naetwork with parameters {m1, m2, p, cull, maxDeg}\n"
+              f"Number of usable networks = {usable_networks}.")
+        return I
+        # [m1, m2, p, cull, maxDeg, conn]  # Good idea?
 
-        return (I, [m1, m2, p, cull, maxDeg, conn])  # Good idea?
-
-
+attempt = 0
+usable_networks = 0
+networks_for_use = [netgen_dba(n=1000, m1=int(x[2]), m2=int(x[3]), p=float(x[4]),
+                               cull=x[6], maxDeg=int(x[5])) for x in net_set[1:]]
+# networks_for_use = map(netgen_dba(, net_set[1:10]) TODO Try to use map to map netgen_dba on the list of parameter sets.
+print(len(networks_for_use))
+networks_for_use = [x for x in networks_for_use if x != 'fail']
+print(len(networks_for_use))
 # Initialize global variable it, by seting it to zero
-it = 0
 
 
 class NormAgent(Agent):
@@ -160,22 +172,25 @@ class NormModel(Model):
     def __init__(self, size, set_no):
         self.num_agents = size
         self.num_nodes = self.num_agents
-        self.set = net_set[set_no][2:]  # Read the net_set, remove old index data.
-        self.m1 = self.set[0]
-        self.m2 = self.set[1]
-        self.p = self.set[2]
-        self.cull = self.set[4]
-        self.maxDeg = self.set[3]
-        self.network = netgen_dba(self.m1, self.m2, self.p, self.cull,
-                                  self.maxDeg)  # Returns a tuple (network, [list, of, parameters])
-        self.G = self.network[1]
-        self.parameters = self.network[2]
-        self.grid = NetworkGrid(self.G)
+        self.set = set_no
+        # self.set = net_set[set_no][2:-1]  # Read the net_set, remove old index data.
+        # self.m1 = int(self.set[0])
+        # self.m2 = int(self.set[1])
+        # self.p = float(self.set[2])
+        # self.cull = self.set[4]
+        # self.maxDeg = int(self.set[3])
+        # self.network = netgen_dba(1000, self.m1, self.m2, self.p, self.cull,
+        #                           self.maxDeg)  # Returns a tuple (network, [list, of, parameters])
+        # if self.network == "fail":
+        #     self.running = False
+        self.I = networks_for_use[self.set]
+        # self.parameters = self.network[1]
+        self.grid = NetworkGrid(self.I)
         self.schedule = SimultaneousActivation(self)
         self.running = True
 
-        # i = 0  <- this shit necessary??
-        list_of_random_nodes = self.random.sample(self.G.nodes(), self.num_agents)
+        i = 0  # <- this shit necessary??
+        list_of_random_nodes = self.random.sample(self.I.nodes(), self.num_agents)
         for i in range(self.num_agents):
             a = NormAgent(i, self)
             self.grid.place_agent(a, list_of_random_nodes[i])
@@ -201,12 +216,11 @@ class NormModel(Model):
 
 fixed_params = {
     "size": 1000,
-
 }
 
 variable_params = {
-    "set_no": np.arange(len(net_set)),
-    "cull": [True, False]
+    # "set_no": np.arange(len(net_set)),
+    "set_no": np.arange(5),
 }
 
 # TODO Create a BatchRun with the right parameters
@@ -215,10 +229,13 @@ batch_run = BatchRunner(
     NormModel,
     variable_params,
     fixed_params,
-    iterations=2,  # TODO Zdecydować ile ma tych iteracji być na zestaw parametrów.
-    max_steps=150,  # TODO Zdecydować, po którym kroku ma się zatrzymywać.
+    iterations=2,  # TODO How many iterations per set of parameters?
+    max_steps=150,  # TODO How many steps per simulation run?
 
-    # TODO Ogarnąć to gówno jakoś
+    # TODO Create a traditional model (no batchrun), based on this one. Run it and see how many runs we'll need.
+
+    # TODO Decide, which network parameters and which agent paremeters are to be collected.
+    # TODO Write reporters, which will collect the data in a usable fashion.
     # model_reporters={"PerHate": percent_haters,
     #                  "AveSens": average_sens,
     #                  "AveCont": average_contempt,
@@ -231,8 +248,8 @@ batch_run = BatchRunner(
 
 batch_run.run_all()
 
-# TODO Ogarnąć zapis plików i po czym ma zbierać dane.
-agent_data = batch_run.get_agent_vars_dataframe()
-run_data = batch_run.get_model_vars_dataframe()
-run_data.to_csv('zbiorcze.csv')
-agent_data.to_csv('agentami.csv')
+# TODO Save collected data to files for further analysis
+# agent_data = batch_run.get_agent_vars_dataframe()
+# run_data = batch_run.get_model_vars_dataframe()
+# run_data.to_csv('zbiorcze.csv')
+# agent_data.to_csv('agentami.csv')
