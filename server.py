@@ -7,37 +7,37 @@ def network_portrayal(G):
     portrayal = dict()
     portrayal['nodes'] = [
         {"id": node_id,
-         "size": agents[0].hate,
-         "color": "black" if agents[0].behavior == 1 else "#999999"}
+         "size": agents[0].hate * 0.2,
+         "color": "black" if agents[0].behavior == 1 else "#CCCCCC"}
         for (node_id, agents) in G.nodes.data('agent')
     ]
 
     portrayal['egdes'] = [
-        {"id": edge_id,
-         "source": source,
+        {"source": source,
          "target": target,
-         "color": "#111111"
-         } for edge_id, (source, target) in enumerate(G.edges)
+         "color": "#000000",
+         "width": .5
+         } for (source, target) in enumerate(G.edges)
     ]
 
     return portrayal
 
-grid = NetworkModule(network_portrayal)
+network = NetworkModule(network_portrayal, 500, 500, library='sigma')
 
 
 PerHate = ChartModule([{"Label": "PerHate",
                       "Color": "Black"}],
                     data_collector_name="datacollector")
 
-chartHate = ChartModule([{"Label": "AveHate",
+chartHate = ChartModule([{"Label": "AveKnowing",
                       "Color": "Black"}],
                     data_collector_name="datacollector")
 
 server = ModularServer(NormModel,
-                       [grid,
+                       [network,
                         PerHate,
                         chartHate,
                         ],
                        "Hate Speech Model",
-                       {"size": 1000})
+                       {"size": 100})
 server.port = 8521

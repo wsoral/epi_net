@@ -34,7 +34,7 @@ for the drop in order.
 The interactions between agents (represented by respectively, edges and nodes of our networks)
 can be described as exposure to hate speech.
 Each agent has his own tendency to utter hate speech. This can be understood as their contempt
-towards a minority group, for example. The tendency corresponds to the probability of comitting
+towards a minority group, for example. The tendency corresponds to the probability of committing
 an act of hate speech by a given agent, and is of range (0,1). Each time an agent's neighbour
 uses hate speech, this agent's probability of using HS - raises by a small number.
 This represents the diminishing of social norms, which inhibit us from using HS.
@@ -62,31 +62,39 @@ def percent_haters(model):
     x = sum(agent_behs) / len(agent_behs)
     return x
 
-
-# Define a function for calculating mean level of hate in the network at given step.
-
-
 def average_hate(model):
     agent_hate = [agent.hate for agent in model.schedule.agents]
-    x = sum(agent_hate) / len(agent_hate)
+    x = np.mean(agent_hate)
+    return x
+# Define a unction for calculating the percentage of hate-knowing agents in each step.
+
+
+def percent_hate_knowing(model):
+    agent_knowledge = [agent.knows_hatered for agent in model.schedule.agents]
+    x = np.mean(agent_knowledge)
     return x
 
 
 # Define a function that takes the parameters of newborn network and returns them
 
 
-def net_parafara(model):
-    x = model.parameters
+def net_avg_deg(model):
+    x = model.net_deg
     return x
 
+def net_culling(model):
+    x = model.big_nodes
+    return x
+
+def max_deg(model):
+    x = model.culling
+    return x
 
 net_setx = net_reader('nets_to_use.csv')[1:]
-net_set = [tuple(i) for i in net_setx]
+net_set = [tuple(i[2:7]) for i in net_setx]
 
 # Network generators
-
-# def netgen_dba(n=1000, m1=5, m2=2, p=.64, cull=True, maxDeg=20):  # The default values, will not be used in the sim.
-# get the global variable it to count attempts - can't be local because the function calls itself at failure.
+# TODO Perhaps simple Barabasi - Albert model would be just fine?
 def netgen_dba(n, m1, m2, p, cull, maxDeg):
     global attempt
     global usable_networks
@@ -123,18 +131,17 @@ def netgen_dba(n, m1, m2, p, cull, maxDeg):
         usable_networks += 1
         print(f"Successfully generated naetwork with parameters {m1, m2, p, cull, maxDeg}\n"
               f"Number of usable networks = {usable_networks}.")
-        return I
-        # [m1, m2, p, cull, maxDeg, conn]  # Good idea?
+        return I, avg_deg, cull, maxDeg
 
 attempt = 0
 usable_networks = 0
-networks_for_use = [netgen_dba(n=1000, m1=int(x[2]), m2=int(x[3]), p=float(x[4]),
-                               cull=x[6], maxDeg=int(x[5])) for x in net_set[1:]]
+networks_for_use = [netgen_dba(n=1000, m1=int(x[0]), m2=int(x[1]), p=float(x[2]),
+                               cull=x[4], maxDeg=int(x[3])) for x in net_set[1:50]] # TODO Remove the 5 before final run.
 # networks_for_use = map(netgen_dba(, net_set[1:10]) TODO Try to use map to map netgen_dba on the list of parameter sets.
+# TODO include parameters in networks_for_use
 print(len(networks_for_use))
 networks_for_use = [x for x in networks_for_use if x != 'fail']
 print(len(networks_for_use))
-# Initialize global variable it, by seting it to zero
 
 
 class NormAgent(Agent):
@@ -152,7 +159,7 @@ class NormAgent(Agent):
         self._nextBehavior = self.behavior
         self._nextHate = self.hate
 
-        if HATER in [neigh_beh] or self.behavior == HATER:
+        if HATER in neigh_beh or self.behavior == HATER:
             self.knows_hatered = 1
 
         if (self.hate > self.random.uniform(0, 1)) and (self.knows_hatered == 1):
@@ -161,7 +168,7 @@ class NormAgent(Agent):
             self._nextBehavior = NO_HATER
 
         if self.hate < 0.8:
-            self._nextHate = self.hate + sum(neigh_beh) * 0.01
+            self._nextHate = self.hate + np.mean(neigh_beh) * 0.01
 
     def advance(self):
         self.hate = self._nextHate
@@ -173,34 +180,28 @@ class NormModel(Model):
         self.num_agents = size
         self.num_nodes = self.num_agents
         self.set = set_no
-        # self.set = net_set[set_no][2:-1]  # Read the net_set, remove old index data.
-        # self.m1 = int(self.set[0])
-        # self.m2 = int(self.set[1])
-        # self.p = float(self.set[2])
-        # self.cull = self.set[4]
-        # self.maxDeg = int(self.set[3])
-        # self.network = netgen_dba(1000, self.m1, self.m2, self.p, self.cull,
-        #                           self.maxDeg)  # Returns a tuple (network, [list, of, parameters])
-        # if self.network == "fail":
-        #     self.running = False
-        self.I = networks_for_use[self.set]
-        # self.parameters = self.network[1]
+        self.I = networks_for_use[self.set][0]
+        self.net_deg = networks_for_use[self.set][1]  # 1st parameter - average node degree
+        self.big_nodes = networks_for_use[self.set][2]  # 2nd parameter - huge networks allowed?
+        self.culling = networks_for_use[self.set][3]  # 3rd parameter - maximum node degree allowed. only use if
+        # big_nodes = True!
         self.grid = NetworkGrid(self.I)
         self.schedule = SimultaneousActivation(self)
         self.running = True
 
-        i = 0  # <- this shit necessary??
-        list_of_random_nodes = self.random.sample(self.I.nodes(), self.num_agents)
-        for i in range(self.num_agents):
+        for i, node in enumerate(self.I.nodes()):
             a = NormAgent(i, self)
-            self.grid.place_agent(a, list_of_random_nodes[i])
             self.schedule.add(a)
-            if percent_haters(self) > 0.8:  # When the percentage of haters in the model exceeds 80,
-                self.running = False  # the simulation is stopped, data collected, and next one is started.
+            self.grid.place_agent(a, node)
+
 
         self.datacollector = DataCollector(
             model_reporters={"PerHate": percent_haters,
+                             "AveKnowing": percent_hate_knowing,
                              "AveHate": average_hate,
+                             "MeanDeg": net_avg_deg,
+                             "Culling": net_culling,
+                             "MaxDeg": max_deg,
                              },
             agent_reporters={"Hate": "behavior"}
         )
@@ -208,11 +209,8 @@ class NormModel(Model):
     def step(self):
         self.datacollector.collect(self)
         self.schedule.step()
-
-
-# Fixed and set parameters for the simulation.
-# As it's impossible to provide a preselected list of lists of values,
-# only the ones most common in successfull net generations were passed.
+        if percent_haters(self) > 0.8:  # When the percentage of haters in the model exceeds 80,
+            self.running = False  # the simulation is stopped, data collected, and next one is started.
 
 fixed_params = {
     "size": 1000,
@@ -220,7 +218,7 @@ fixed_params = {
 
 variable_params = {
     # "set_no": np.arange(len(net_set)),
-    "set_no": np.arange(5),
+    "set_no": np.arange(10) # For testing prurposes.
 }
 
 # TODO Create a BatchRun with the right parameters
@@ -230,19 +228,22 @@ batch_run = BatchRunner(
     variable_params,
     fixed_params,
     iterations=2,  # TODO How many iterations per set of parameters?
-    max_steps=150,  # TODO How many steps per simulation run?
+    max_steps=30,  # TODO How many steps per simulation run?
 
-    # TODO Create a traditional model (no batchrun), based on this one. Run it and see how many runs we'll need.
+    # TODO Create a traditional model (no batch run), based on this one. Run it and see how many runs we'll need.
 
-    # TODO Decide, which network parameters and which agent paremeters are to be collected.
+    # TODO Decide, which network parameters and which agent parameters are to be collected.
     # TODO Write reporters, which will collect the data in a usable fashion.
-    # model_reporters={"PerHate": percent_haters,
-    #                  "AveSens": average_sens,
+    model_reporters={"PerHate": percent_haters,
+                     "AveKnowing": percent_hate_knowing,
+                     "MeanDeg": net_avg_deg,
+                     "Culling": net_culling,
+                     "AveHate": average_hate,
+                     "MaxDeg": max_deg,
     #                  "AveCont": average_contempt,
     #                  "CorHatCon": cor_hate_cont
-    #                  },
+                     },
     # agent_reporters={"Hate": "behavior",
-    #                  "Sociability": "sociability",
     #                  "Step": "step_no"}
 )
 
@@ -250,6 +251,9 @@ batch_run.run_all()
 
 # TODO Save collected data to files for further analysis
 # agent_data = batch_run.get_agent_vars_dataframe()
-# run_data = batch_run.get_model_vars_dataframe()
-# run_data.to_csv('zbiorcze.csv')
+run_data = batch_run.get_model_vars_dataframe()
+run_data.to_csv('zbiorcze.csv')
 # agent_data.to_csv('agentami.csv')
+
+
+# TODO - the simulation doesn't advance in terms of haters! And the numbers of those, who know hate, remains constant!

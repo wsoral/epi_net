@@ -14,66 +14,40 @@ def percent_haters(model):
     x = sum(agent_behs)/len(agent_behs)
     return x
 
-def average_hate(model):
-    agent_hate = [agent.hate for agent in model.schedule.agents]
-    x = sum(agent_hate)/len(agent_hate)
+def percent_hate_knowing(model):
+    agent_knowledge = [agent.knows_hatered for agent in model.schedule.agents]
+    x = np.mean(agent_knowledge)
     return x
 
-# def netgen_dba(n=400, m1=4, m2=3, p=.64):
-#     I = nx.dual_barabasi_albert_graph(n=n, m1=m1, m2=m2, p=p)
-#     degs = [I.degree[node] for node in list(I.nodes)]
-#     avg_deg = np.mean(degs)
-#     avg_clust = nx.average_clustering(I)
-#     connectivity = nx.node_connectivity(I)
-#
-#     return [I, avg_clust, connectivity]
-
-def netgen_dba(n=1000, m1=4, m2=3, p=.55):
-    I = nx.dual_barabasi_albert_graph(n=n, m1=m1, m2=m2, p=p)
-    degs = [I.degree[node] for node in list(I.nodes)]
-    avg_deg = np.mean(degs)
-    while avg_deg > 7 or avg_deg <6:
-        print(f"Wrong mean degree number. Getting {avg_deg}. Rerunning.")
-        I = nx.dual_barabasi_albert_graph(n=n, m1=m1, m2=m2, p=p)
+def netgen_dba(n, m1, m2, p, cull, maxDeg):
+    I = nx.dual_barabasi_albert_graph(n=n, m1=m1, m2=m2, p=p)  # Call the basic function
+    degs = [I.degree[node] for node in list(I.nodes)]  # Calculate the node degree list for all nodes
+    avg_deg = np.mean(degs)  # Calculate the mean node degree for the whole network.
+    # conn = nx.average_node_connectivity(I)
+    conn = 1
+    if cull:  # Only if the network generator should remove supernodes.
+        big_nodes = [node for node in list(I.nodes) if I.degree(node) >= maxDeg]  # Assigned SuperNode size.
+        I.remove_nodes_from(big_nodes)
+        for numerro in big_nodes:  # My very simple function for removing SuperNodes.
+            I.add_node(numerro)
+            eN = random.choice([m1, m2])
+            for _ in range(eN):
+                to = random.choice(list(I.nodes()))
+                I.add_edge(numerro, to)
         degs = [I.degree[node] for node in list(I.nodes)]
-        avg_deg = np.mean(degs)
-    big_nodes = [node for node in list(I.nodes) if I.degree(node) >= 40]
-    node_size = [I.degree(node) for node in big_nodes]
-    return I
+        avg_deg = np.mean(degs)  # This whole loop should be a function, but method will not produce any new SuperNodes
+        # conn = nx.average_node_connectivity(I)
+        conn = 1
+    if not (nx.is_connected(I) and (4 <= avg_deg <= 10)):  # Test if network within parameters
+        return netgen_dba(n=n, m1=m1, m2=m2, p=p, maxDeg=maxDeg, cull=cull)  # If not within parameters, call self.
+    else:
+        print(f"Successfully generated naetwork with parameters {m1, m2, p, cull, maxDeg}\n")
+        return I, avg_deg, cull, maxDeg
 
-# def netgen_dba(n=1000, m1=4, m2=3, p=.64, maxDeg=40):
-#     I = nx.dual_barabasi_albert_graph(n=n, m1=m1, m2=m2, p=p)
-#     degs = [I.degree[node] for node in list(I.nodes)]
-#     avg_deg = np.mean(degs)
-#     big_nodes = [node for node in list(I.nodes) if I.degree(node) >= maxDeg]
-#     node_size = [I.degree(node) for node in big_nodes]
-#     I.remove_nodes_from(big_nodes)
-#     for numerro in big_nodes:
-#         I.add_node(numerro)
-#         eN = random.choice([m1, m2])
-#         for _ in range(eN):
-#             to = random.choice(list(I.nodes()))
-#             I.add_edge(numerro, to)
-#     new_degs = [I.degree[node] for node in list(I.nodes)]
-#     new_avg = np.mean(new_degs)
-#     while new_avg > 7 or new_avg < 6:
-#         I = nx.dual_barabasi_albert_graph(n=n, m1=m1, m2=m2, p=p)
-#         degs = [I.degree[node] for node in list(I.nodes)]
-#         avg_deg = np.mean(degs)
-#         big_nodes = [node for node in list(I.nodes) if I.degree(node) >= maxDeg]
-#         node_size = [I.degree(node) for node in big_nodes]
-#         I.remove_nodes_from(big_nodes)
-#         for numerro in big_nodes:
-#             I.add_node(numerro)
-#             eN = random.choice([m1, m2])
-#             for _ in range(eN):
-#                 to = random.choice(list(I.nodes()))
-#                 I.add_edge(numerro, to)
-#         new_degs = [I.degree[node] for node in list(I.nodes)]
-#         new_avg = np.mean(new_degs)
-#
-#     return I
 
+
+the_network = netgen_dba(n=100  , m1 = 3, m2 = 4, p =.64, maxDeg=50, cull=False)
+# the_network = nx.gnp_random_graph(n=1000, p=0.002)
 
 class NormAgent(Agent):
     def __init__(self, unique_id, model):
@@ -90,7 +64,7 @@ class NormAgent(Agent):
         self._nextBehavior = self.behavior
         self._nextHate = self.hate
 
-        if (HATER in [neigh_beh] or self.behavior == HATER):
+        if (HATER in neigh_beh or self.behavior == HATER):
             self.knows_hatered = 1
 
         if (self.hate > self.random.uniform(0,1)) and (self.knows_hatered == 1):
@@ -98,36 +72,45 @@ class NormAgent(Agent):
         else: self._nextBehavior = NO_HATER
 
         if self.hate < 0.8:
-            self._nextHate = self.hate + sum(neigh_beh)*0.01
+            self._nextHate = self.hate + np.mean(neigh_beh)*0.01
 
     def advance(self):
         self.hate = self._nextHate
         self.behavior = self._nextBehavior
 
 
+
 class NormModel(Model):
     def __init__(self, size):
         self.num_agents = size
         self.num_nodes = self.num_agents
-        self.G = netgen_dba()
+        self.G = the_network[0]
+        # self.G = the_network
         self.grid = NetworkGrid(self.G)
         self.schedule = SimultaneousActivation(self)
         self.running = True
 
-        i = 0
-        list_of_random_nodes = self.random.sample(self.G.nodes(), self.num_agents)
-        for i in range(self.num_agents):
+        # list_of_random_nodes = self.random.sample(self.G.nodes(), self.num_agents)
+        # for i in range(self.num_agents):
+        #     a = NormAgent(i, self)
+        #     self.grid.place_agent(a, list_of_random_nodes[i])
+        #     self.schedule.add(a)
+
+        for i, node in enumerate(self.G.nodes()):
             a = NormAgent(i, self)
-            self.grid.place_agent(a, list_of_random_nodes[i])
             self.schedule.add(a)
+            self.grid.place_agent(a, node)
+
 
         self.datacollector = DataCollector(
             model_reporters={"PerHate": percent_haters,
-                             "AveHate": average_hate,
-                            },
+                             "AveKnowing": percent_hate_knowing,
+                             },
             agent_reporters={"Hate": "behavior"}
         )
 
     def step(self):
         self.datacollector.collect(self)
         self.schedule.step()
+        if percent_haters(self) > 0.8:  # When the percentage of haters in the model exceeds 80,
+            self.running = False  # the simulation is stopped, data collected, and next one is started.
