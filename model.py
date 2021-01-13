@@ -6,8 +6,9 @@ import networkx as nx
 import numpy as np
 import random
 
+COUNTER_HATER = -1
+NEUTRAL = 0
 HATER = 1
-NO_HATER = 0
 
 def percent_haters(model):
     agent_behs = [agent.behavior for agent in model.schedule.agents]
@@ -52,30 +53,32 @@ the_network = netgen_dba(n=100  , m1 = 3, m2 = 4, p =.64, maxDeg=50, cull=False)
 class NormAgent(Agent):
     def __init__(self, unique_id, model):
         super().__init__(unique_id, model)
-        self.behavior = self.random.choices([NO_HATER, HATER], weights=[9,1])[0]
-        self.hate = self.random.betavariate(2,5)
-        self.knows_hatered = 0
+        self.behavior = self.random.choices([COUNTER_HATER, NEUTRAL, HATER], weights=[1,8,1])[0]
+        self.contempt = self.random.betavariate(2,5)
+        self.sensitivity = self.random.betavariate(5,2)
 
     def step(self):
         neighbors_nodes = self.model.grid.get_neighbors(self.pos, include_center=False)
         neighbors = self.model.grid.get_cell_list_contents(neighbors_nodes)
         neigh_beh = [neigh.behavior for neigh in neighbors]
+        sum_hater = np.sum([x == 1 for x in neigh_beh])
+        sum_counter = np.sum([x == -1 for x in neigh_beh])
 
         self._nextBehavior = self.behavior
-        self._nextHate = self.hate
+        self._nextSensitivity = self.sensitivity
 
-        if (HATER in neigh_beh or self.behavior == HATER):
-            self.knows_hatered = 1
-
-        if (self.hate > self.random.uniform(0,1)) and (self.knows_hatered == 1):
+        if (self.contempt >= 0.7 and self.sensitivity <= 0.3):
             self._nextBehavior = HATER
-        else: self._nextBehavior = NO_HATER
+        elif (self.contempt <= 0.3 and self.sensitivity >= 0.7):
+            self._nextBehavior = COUNTER_HATER
+        else:
+            self._nextBehavior = NEUTRAL
 
-        if self.hate < 0.8:
-            self._nextHate = self.hate + np.mean(neigh_beh)*0.01
+        self._nextSensitivity = self.sensitivity + sum_hater*0.01 - sum_counter*0.01
+
 
     def advance(self):
-        self.hate = self._nextHate
+        self.sensitivity = self._nextSensitivity
         self.behavior = self._nextBehavior
 
 
