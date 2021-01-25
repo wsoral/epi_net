@@ -119,5 +119,8 @@ class NormModel(Model):
         self.datacollector.collect(self)
         self.schedule.step()
         self.step_counter += 1
-        if percent_haters(self) > 0.8:  # When the percentage of haters in the model exceeds 80,
+        if percent_haters(self) > 0.35 or self.step_counter > 250:  # When the percentage of haters in the model exceeds 80,
             self.running = False  # the simulation is stopped, data collected, and next one is started.
+        # Alternatively:
+        if average_sensitivity(self) < 0.1 or self.step_counter > 250:
+            self.running = False

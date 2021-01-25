@@ -43,17 +43,6 @@ And the last element - an agent must have used HS himself in the past, or have w
 neighbour using it, in order to be able to use it themself. 
 """
 
-
-# Define a function to read the network file with nets to be used in simulation.
-
-
-def net_reader(file):
-    with open(file) as f:
-        feats = csv.reader(f)
-        siatki = list(feats)
-        return siatki
-
-
 # Define a function for calculating the percentage of hating agents in each step.
 
 
@@ -62,94 +51,99 @@ def percent_haters(model):
     x = sum(agent_behs) / len(agent_behs)
     return x
 
-def average_hate(model):
-    agent_hate = [agent.hate for agent in model.schedule.agents]
-    x = np.mean(agent_hate)
+def average_sensitivity(model):
+    agent_sensitivity = [agent.sensitivity for agent in model.schedule.agents]
+    x = np.mean(agent_sensitivity)
     return x
-# Define a unction for calculating the percentage of hate-knowing agents in each step.
-
-
-def percent_hate_knowing(model):
-    agent_knowledge = [agent.knows_hatered for agent in model.schedule.agents]
-    x = np.mean(agent_knowledge)
-    return x
-
-
-# Define a function that takes the parameters of newborn network and returns them
 
 
 def net_avg_deg(model):
-    x = model.net_deg
+    x = model.avg_degree
     return x
+
 
 def net_culling(model):
     x = model.big_nodes
     return x
 
-def max_deg(model):
-    x = model.culling
+
+def net_conn(model):
+    x = model.connectivity
     return x
 
-net_setx = net_reader('nets_to_use.csv')[1:]
-net_set = [tuple(i[2:7]) for i in net_setx]
+
+def net_clust(model):
+    x = model.clustering
+    return x
+
+
+def final_step(model):
+    x = model.step_counter
+    return x
+
 
 # Network generators
-# TODO Perhaps simple Barabasi - Albert model would be just fine?
-def netgen_dba(n, m1, m2, p, cull, maxDeg):
-    global attempt
-    global usable_networks
-    attempt += 1
-    if attempt > 10:
-        attempt = 0
-        # When it exceeds 10, the function should stop the given run and return a code for failed attempt
-        # at creating the net within assigned parameters.
-        print(f"Failed generating network with parameters {m1, m2, p, cull, maxDeg}. Trying on.")
-        return "fail"
+# Barabasi-Albert - number 1
 
-    I = nx.dual_barabasi_albert_graph(n=n, m1=m1, m2=m2, p=p)  # Call the basic function
-    degs = [I.degree[node] for node in list(I.nodes)]  # Calculate the node degree list for all nodes
-    avg_deg = np.mean(degs)  # Calculate the mean node degree for the whole network.
-    # conn = nx.average_node_connectivity(I)
-    conn = 1
-    if cull:  # Only if the network generator should remove supernodes.
-        big_nodes = [node for node in list(I.nodes) if I.degree(node) >= maxDeg]  # Assigned SuperNode size.
-        I.remove_nodes_from(big_nodes)
-        for numerro in big_nodes:  # My very simple function for removing SuperNodes.
-            I.add_node(numerro)
-            eN = random.choice([m1, m2])
-            for _ in range(eN):
-                to = random.choice(list(I.nodes()))
-                I.add_edge(numerro, to)
-        degs = [I.degree[node] for node in list(I.nodes)]
-        avg_deg = np.mean(degs)  # This whole loop should be a function, but method will not produce any new SuperNodes
-        # conn = nx.average_node_connectivity(I)
-        conn = 1
-    if not (nx.is_connected(I) and (4 <= avg_deg <= 10)):  # Test if network within parameters
-        return netgen_dba(n=n, m1=m1, m2=m2, p=p, maxDeg=maxDeg, cull=cull)  # If not within parameters, call self.
-    else:
-        attempt = 0  # Zero the attempt counter.
-        usable_networks += 1
-        print(f"Successfully generated naetwork with parameters {m1, m2, p, cull, maxDeg}\n"
-              f"Number of usable networks = {usable_networks}.")
-        return I, avg_deg, cull, maxDeg
+def netgen_ba(n, m):
+    I = nx.barabasi_albert_graph(n=n, m=m)
+    degs = [I.degree[node] for node in I.nodes()]
+    avg_deg = np.mean(degs)
+    max_deg = np.max(degs)
+    conn = nx.average_node_connectivity(I)
+    clust = nx.average_clustering(I)
+    return I, avg_deg, max_deg, conn, clust
 
-attempt = 0
-usable_networks = 0
-networks_for_use = [netgen_dba(n=1000, m1=int(x[0]), m2=int(x[1]), p=float(x[2]),
-                               cull=x[4], maxDeg=int(x[3])) for x in net_set[1:50]] # TODO Remove the 5 before final run.
-# networks_for_use = map(netgen_dba(, net_set[1:10]) TODO Try to use map to map netgen_dba on the list of parameter sets.
-# TODO include parameters in networks_for_use
-print(len(networks_for_use))
-networks_for_use = [x for x in networks_for_use if x != 'fail']
-print(len(networks_for_use))
+
+# Erdos-Renyi - number 2
+def netgen_er(n, p):
+    I = nx.erdos_renyi_graph(n=n, p=p)
+    degs = [I.degree[node] for node in I.nodes()]
+    avg_deg = np.mean(degs)
+    max_deg = np.max(degs)
+    conn = nx.average_node_connectivity(I)
+    clust = nx.average_clustering(I)
+    return I, avg_deg, max_deg, conn, clust
+
+# Random Regular - number 3
+def netgen_rr(n, d):
+    I = nx.random_regular_graph(d=d, n=n)
+    degs = [I.degree[node] for node in I.nodes()]
+    avg_deg = np.mean(degs)
+    max_deg = np.max(degs)
+    conn = nx.average_node_connectivity(I)
+    clust = nx.average_clustering(I)
+    return I, avg_deg, max_deg, conn, clust
+
+
+# Create an empty dictionary for networks, and for each number in (1,2,3), generate a list of networks, and supp. data.
+networks_for_use = {}
+networks_for_use['1'] = []
+for x in range(100):
+    net, data = netgen_ba(100, 4)
+    networks_for_use['1'].append((net, data))
+    print(f'Finished generating network number {x+1} from set number 1.')
+
+networks_for_use['2'] = []
+for x in range(100):
+    net, data = netgen_er(100, .078)
+    networks_for_use['2'].apppend((net, data))
+    print(f'Finished generating network number {x + 1} from set number 2.')
+
+networks_for_use['3'] = []
+for x in range(100):
+    net, data = netgen_rr(100, 4)
+    networks_for_use['3'].append((net, data))
+    print(f'Finished generating network number {x + 1} from set number 3.')
 
 
 class NormAgent(Agent):
     def __init__(self, unique_id, model):
         super().__init__(unique_id, model)
         self.behavior = self.random.choices([NO_HATER, HATER], weights=[9, 1])[0]
-        self.hate = self.random.betavariate(2, 5)
-        self.knows_hatered = 0
+        self.contempt = self.random.betavariate(2, 5)
+        self.sensitivity = self.random.betavariate(5,2)
+
 
     def step(self):
         neighbors_nodes = self.model.grid.get_neighbors(self.pos, include_center=False)
@@ -157,37 +151,37 @@ class NormAgent(Agent):
         neigh_beh = [neigh.behavior for neigh in neighbors]
 
         self._nextBehavior = self.behavior
-        self._nextHate = self.hate
+        self._nextSensitivity = self.sensitivity
 
-        if HATER in neigh_beh or self.behavior == HATER:
-            self.knows_hatered = 1
 
-        if (self.hate > self.random.uniform(0, 1)) and (self.knows_hatered == 1):
+        if (self.contempt > self.random.uniform(0,1)) and (self.sensitivity < 0.3):
             self._nextBehavior = HATER
-        else:
-            self._nextBehavior = NO_HATER
+        else: self._nextBehavior = NO_HATER
 
-        if self.hate < 0.8:
-            self._nextHate = self.hate + np.mean(neigh_beh) * 0.01
+        if self.sensitivity > 0.1:
+            self._nextSensitivity = self.sensitivity - np.mean(neigh_beh)*0.2
+
 
     def advance(self):
-        self.hate = self._nextHate
         self.behavior = self._nextBehavior
-
+        self.sensitivity = self._nextSensitivity
 
 class NormModel(Model):
-    def __init__(self, size, set_no):
+    def __init__(self, size, set_no, subset_no):
         self.num_agents = size
         self.num_nodes = self.num_agents
-        self.set = set_no
-        self.I = networks_for_use[self.set][0]
-        self.net_deg = networks_for_use[self.set][1]  # 1st parameter - average node degree
-        self.big_nodes = networks_for_use[self.set][2]  # 2nd parameter - huge networks allowed?
-        self.culling = networks_for_use[self.set][3]  # 3rd parameter - maximum node degree allowed. only use if
-        # big_nodes = True!
+        self.set = str(set_no)
+        self.subset = subset_no
+        self.I = networks_for_use[self.set][self.subset][0]
+        self.type = str(self.subset)
+        self.avg_deg = networks_for_use[self.set][self.subset][1]  # 1st parameter - average node degree
+        self.big_nodes = networks_for_use[self.set][self.subset][2]  # 2nd parameter - degree of highest-degree node
+        self.connectivity = networks_for_use[self.set][self.subset][3]  # 3rd parameter - mean network connectivity
+        self.clustering = networks_for_use[self.set][self.subset][4]  # Network's clustering coeff.
         self.grid = NetworkGrid(self.I)
         self.schedule = SimultaneousActivation(self)
         self.running = True
+        self.step_counter = 1
 
         for i, node in enumerate(self.I.nodes()):
             a = NormAgent(i, self)
@@ -197,11 +191,12 @@ class NormModel(Model):
 
         self.datacollector = DataCollector(
             model_reporters={"PerHate": percent_haters,
-                             "AveKnowing": percent_hate_knowing,
-                             "AveHate": average_hate,
+                             "AveSensitivity": average_sensitivity,
                              "MeanDeg": net_avg_deg,
-                             "Culling": net_culling,
-                             "MaxDeg": max_deg,
+                             "MaxDeg": net_culling,
+                             "NetConnect": net_conn,
+                             "NetClust": net_clust,
+                             "FinalStep": final_step,
                              },
             agent_reporters={"Hate": "behavior"}
         )
@@ -209,39 +204,34 @@ class NormModel(Model):
     def step(self):
         self.datacollector.collect(self)
         self.schedule.step()
-        if percent_haters(self) > 0.8:  # When the percentage of haters in the model exceeds 80,
-            self.running = False  # the simulation is stopped, data collected, and next one is started.
+        self.step_counter += 1
+        if average_sensitivity(self) < 0.1 or self.step_counter > 250:
+            self.running = False
 
 fixed_params = {
-    "size": 1000,
+    "size": 100,
 }
 
 variable_params = {
-    # "set_no": np.arange(len(net_set)),
-    "set_no": np.arange(10) # For testing prurposes.
+    "subset_no": np.arange(100),
+    "set_no": np.arange(1,4),
 }
 
-# TODO Create a BatchRun with the right parameters
 
 batch_run = BatchRunner(
     NormModel,
     variable_params,
     fixed_params,
-    iterations=2,  # TODO How many iterations per set of parameters?
-    max_steps=30,  # TODO How many steps per simulation run?
+    iterations=2,
+    max_steps=255,
 
-    # TODO Create a traditional model (no batch run), based on this one. Run it and see how many runs we'll need.
-
-    # TODO Decide, which network parameters and which agent parameters are to be collected.
-    # TODO Write reporters, which will collect the data in a usable fashion.
     model_reporters={"PerHate": percent_haters,
-                     "AveKnowing": percent_hate_knowing,
+                     "AveSensitivity": average_sensitivity,
                      "MeanDeg": net_avg_deg,
-                     "Culling": net_culling,
-                     "AveHate": average_hate,
-                     "MaxDeg": max_deg,
-    #                  "AveCont": average_contempt,
-    #                  "CorHatCon": cor_hate_cont
+                     "MaxDeg": net_culling,
+                     "NetConnect": net_conn,
+                     "NetClust": net_clust,
+                     "FinalStep": final_step,
                      },
     # agent_reporters={"Hate": "behavior",
     #                  "Step": "step_no"}
@@ -249,11 +239,9 @@ batch_run = BatchRunner(
 
 batch_run.run_all()
 
-# TODO Save collected data to files for further analysis
 # agent_data = batch_run.get_agent_vars_dataframe()
 run_data = batch_run.get_model_vars_dataframe()
 run_data.to_csv('zbiorcze.csv')
 # agent_data.to_csv('agentami.csv')
 
 
-# TODO - the simulation doesn't advance in terms of haters! And the numbers of those, who know hate, remains constant!
