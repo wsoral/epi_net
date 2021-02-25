@@ -9,22 +9,23 @@ def network_portrayal(G):
     portrayal = dict()
     portrayal['nodes'] = [
         {"id": node_id,
-         "size": agents[0].sensitivity * 0.2,
+         "size": agents[0].sensitivity * 10,
          "color": "black" if agents[0].behavior == 1 else "#CCCCCC"}
         for (node_id, agents) in G.nodes.data('agent')
     ]
 
-    portrayal['egdes'] = [
-        {"source": source,
-         "target": target,
-         "color": "#000000",
+    portrayal['edges'] = [
+        {"id": id,
+         "source": tuple[0],
+         "target": tuple[1],
+         "color": "#CCCCCC",
          "width": .5
-         } for (source, target) in enumerate(G.edges)
+         } for (id, tuple) in enumerate(G.edges)
     ]
 
     return portrayal
 
-network = NetworkModule(network_portrayal, 500, 500, library='sigma')
+network = NetworkModule(network_portrayal, 500, 500, library='d3')
 
 
 PerHate = ChartModule([{"Label": "PerHate",
