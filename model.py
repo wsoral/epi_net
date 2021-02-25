@@ -79,7 +79,7 @@ class NormAgent(Agent):
         else: self._nextBehavior = NO_HATER
 
         if self.sensitivity > 0.1:
-            self._nextSensitivity = self.sensitivity - np.mean(neigh_beh)*0.2
+            self._nextSensitivity = self.sensitivity - np.sum(neigh_beh)*0.02
 
     def advance(self):
         # self.contempt = self._nextContempt
