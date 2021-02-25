@@ -93,11 +93,11 @@ class NormModel(Model):
         self.num_nodes = self.num_agents
         self.type = net_type
         if self.type == 1:
-            self.G, self.avg_degree, self.big_nodes, self.connectivity, self.clustering = netgen_ba(100, 4)
+            self.G, self.avg_degree, self.big_nodes, self.connectivity, self.clustering = netgen_ba(self.num_agents, 4)
         if self.type == 2:
-            self.G, self.avg_degree, self.big_nodes, self.connectivity, self.clustering = netgen_er(100, .078)
+            self.G, self.avg_degree, self.big_nodes, self.connectivity, self.clustering = netgen_er(self.num_agents, .078)
         if self.type == 3:
-            self.G, self.avg_degree, self.big_nodes, self.connectivity, self.clustering = netgen_rr(100, 4)
+            self.G, self.avg_degree, self.big_nodes, self.connectivity, self.clustering = netgen_rr(self.num_agents, 4)
         self.grid = NetworkGrid(self.G)
         self.schedule = SimultaneousActivation(self)
         self.running = True
