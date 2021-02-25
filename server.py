@@ -24,7 +24,7 @@ def network_portrayal(G):
 
     return portrayal
 
-network = NetworkModule(network_portrayal, 500, 500, library='sigma')
+network = NetworkModule(network_portrayal, 800, 800, library='sigma')
 
 
 PerHate = ChartModule([{"Label": "PerHate",
